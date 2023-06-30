@@ -140,7 +140,7 @@ namespace tp {
 			return left;
 		}
 
-		// recursively returns valid left or right child or root
+		// recursively returns valid isLeft or isRight child or root
 		Node* insertUtil(Node* head, KeyArg key, DataArg data) {
 
 			Node* insertedNode;
