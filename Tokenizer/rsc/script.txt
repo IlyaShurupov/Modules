@@ -1,0 +1,18 @@
+ 
+ 
+ /* ba
+ asadadasdK  */
+
+ -1.f;
+
+ if (+1.f) {
+	 var string = "asas
+	 d";
+
+ }
+
+ while 
+
+ return
+ 
+
