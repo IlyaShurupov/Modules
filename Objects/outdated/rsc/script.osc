@@ -1,0 +1,15 @@
+
+class A {
+	var string = "hello";
+	def log(name) {
+		<< self.string;
+		<< name;
+	}
+}
+
+def main() {
+	var a = new A();
+	a.log("user");
+}
+
+main();
