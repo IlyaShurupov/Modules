@@ -12,7 +12,7 @@ namespace tp {
 
 		class Report {
 			String mData;
-			Buffer<ualni> mLineOffsets;
+			Buffer<String::Index> mLineOffsets;
 
 		public:
 			enum Type { INFO, ERR, WARN, SUC } mType = INFO;

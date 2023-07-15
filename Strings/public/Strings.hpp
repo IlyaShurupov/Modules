@@ -2,7 +2,7 @@
 
 #include "PoolAllocator.hpp"
 #include "StringLogic.hpp"
-#include "TextEditor.hpp"
+#include "Buffer.hpp"
 
 namespace tp {
 
@@ -11,48 +11,23 @@ namespace tp {
 
 	template<typename tChar>
 	class StringTemplate;
-	using String = StringTemplate<uint1>;
+	using String = StringTemplate<int1>;
 
-	template<typename tChar = uint1>
+	template<typename tChar = int1>
 	class StringTemplate {
-		typedef StringLogic<tChar> StringLogic;
+	public:
+		typedef StringLogic<tChar> Logic;
+		typedef Logic::Index Index;
 
+	private:
 		// Hidden slave class
 		class StringData {
-
-			// allows to edit each string with text editor inplace
-			class TextEditors {
-				enum { MAX_EDITED_STRINGS = 65536 }; // 2^16 - do not change mindlessly
-				typedef uint2 Address;
-				ChunkAlloc<TextEditor*, MAX_EDITED_STRINGS> mEditorsPool;
-
-			public:
-				TextEditors() : mEditorsPool() {}
-
-				TextEditor* get(Address address) { return mEditorsPool.getBuff() + address;	}
-
-				Address createTextEditor(const tChar* originalBuffer) {
-					auto entry = (TextEditor**) mEditorsPool.allocate(0);
-					*entry = new TextEditor( originalBuffer );
-					return Address(entry - mEditorsPool.getBuff());
-				}
-
-				void destroyTextEditor(Address address) {
-					auto entry = mEditorsPool.getBuff() + address;
-					mEditorsPool.deallocate(entry);
-					delete entry;
-				}
-			};
-
-			static TextEditors sTextEditors;
-
 		public:
 			uint2 mIsConst; // source is non-modifiable
 			uint2 mEditedIdx; // editor id
 			uint4 mReferenceCount; // number of users of this
 			tChar* mBuff; // actual string data
 
-		public:
 			StringData() {
 				MODULE_SANITY_CHECK(gModuleStrings)
 				mBuff = (tChar*) "*";
@@ -73,7 +48,7 @@ namespace tp {
 			explicit StringData(const tChar* aBuff) {
 				MODULE_SANITY_CHECK(gModuleStrings)
 				DEBUG_ASSERT(aBuff)
-				auto const len = StringLogic::calcLength(aBuff);
+				auto const len = Logic::calcLength(aBuff);
 				resize(len);
 				memCopy(mBuff, aBuff, len);
 				mReferenceCount = 0;
@@ -82,52 +57,18 @@ namespace tp {
 			}
 
 			[[nodiscard]] tChar* getBuffer() {
-				DEBUG_ASSERT(!isEditorMode())
-				if (isEditorMode()) return nullptr;
 				return mBuff;
 			}
 
 			~StringData() {
 				if (!mIsConst) delete[] mBuff;
-				if (isEditorMode()) sTextEditors.destroyTextEditor(mEditedIdx);
 			}
 
-		public:
 			void resize(ualni size) {
-				DEBUG_ASSERT(!isEditorMode() && mReferenceCount == 1 && !mIsConst)
+				DEBUG_ASSERT(mReferenceCount == 1 && !mIsConst)
 				delete[] mBuff;
 				mBuff = new tChar[size + 1];
-				mBuff[size] = StringLogic::getEndChar();
-			}
-
-		public:
-			[[nodiscard]] bool isEditorMode() const { return mEditedIdx; }
-
-			void createEditor() {
-				DEBUG_ASSERT(!isEditorMode())
-				if (isEditorMode()) mEditedIdx = sTextEditors.createTextEditor(mBuff);
-			}
-
-			[[nodiscard]] TextEditor* getEditor() const {
-				DEBUG_ASSERT(isEditorMode())
-				if (!isEditorMode()) return nullptr;
-				return sTextEditors.get(mEditedIdx);
-			}
-
-			void applyEditor() {
-				DEBUG_ASSERT(isEditorMode() && mReferenceCount == 1 && !mIsConst)
-				if (!isEditorMode()) return;
-				auto editor = sTextEditors.get(mEditedIdx);
-				resize(editor.textSize());
-				for ( auto character : *editor) {
-					mBuff[character.idx] = character;
-				}
-			}
-
-			void destroyEditor() {
-				DEBUG_ASSERT(isEditorMode())
-				if (!isEditorMode()) return;
-				sTextEditors.destroyTextEditor(mEditedIdx);
+				mBuff[size] = Logic::getEndChar();
 			}
 		};
 
@@ -149,14 +90,8 @@ namespace tp {
 
 		// References existing string data
 		StringTemplate(const StringTemplate& in) {
-			if (in.isEditorMode()) {
-				// Copies raw data and claims ownership over it
-				mStringData = new (sStringPool->allocate(0)) StringData(in.mStringData->mBuff);
-				incReference(mStringData);
-			} else {
-				mStringData = in.mStringData;
-				incReference(mStringData);
-			}
+			mStringData = in.mStringData;
+			incReference(mStringData);
 		}
 
 		// Creates new string data from raw data pointer.
@@ -177,11 +112,6 @@ namespace tp {
 		}
 
 	private:
-
-		[[nodiscard]] bool isEditorMode() const {
-			return mStringData->isEditorMode();
-		}
-
 		static void incReference(StringData* dp) {
 			dp->mReferenceCount++;
 		}
@@ -213,21 +143,7 @@ namespace tp {
 			return mStringData->getBuffer();
 		}
 
-	public: // TextEditor Mode
-		// Enters TextEditor Mode
-		void createEditor() { mStringData->createEdited(); }
-
-		// Access to TextEditor Context & Interface
-		[[nodiscard]] TextEditor* getEditor() { return mStringData->getEdited(); }
-		[[nodiscard]] const TextEditor* getEditor() const { return mStringData->getEdited(); }
-
-		// Applies TextEditor Mode To Current buffer
-		void applyEditor() { mStringData->applyEditor(); }
-
-		// Leaves TextEditor Mode
-		void destroyEditor() { mStringData->destroyEditor(); }
-
-	private:
+	public:
 		void makeModifiable() {
 			// We have no rights to modify if someone references that memory too
 			// So we need to create new copy of StringData
@@ -243,6 +159,28 @@ namespace tp {
 				mStringData = new (sStringPool->allocate(0)) StringData(mStringData->mBuff);
 				incReference(mStringData);
 			}
+		}
+
+	public: // Syntax sugars
+		Index size() const {
+			return Logic::calcLength(read());
+		}
+
+		void calcLineOffsets(Buffer<Index>& aOut) const {
+			Logic::calcLineOffsets(read(), size(), aOut);
+		}
+
+		StringTemplate& operator=(const tChar* in) {
+			this->~StringTemplate();
+			new (this) StringTemplate(in);
+			return *this;
+		}
+
+		StringTemplate& operator=(const StringTemplate& in) {
+			if (&in == this) return *this;
+			~StringTemplate();
+			new (this) StringTemplate(in);
+			return *this;
 		}
 	};
 }

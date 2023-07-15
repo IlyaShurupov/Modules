@@ -175,6 +175,12 @@ namespace tp {
 			if (prevSize > mLoad) resizeBuffer(prevSize);
 		}
 
+		void reserve(ualni aSize) {
+			for (ualni i = 0; i < mLoad; i++) mBuff[i].~tType();
+			mBuff = (tType*) mAllocator.allocate(sizeof(tType) * aSize);
+			mSize = aSize;
+			mLoad = 0;
+		}
 
   private:
     void resizeBuffer(ualni newSize) {

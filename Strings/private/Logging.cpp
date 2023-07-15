@@ -1,7 +1,6 @@
 
 #include "Logging.hpp"
 #include "Allocators.hpp"
-#include "TextEditor.hpp"
 
 #include <cstdio>
 
@@ -18,8 +17,7 @@ namespace tp {
 	}
 
 	void Logger::Report::calcLineCount() {
-		Input input = { mData.raw(), (ualni) mData.size() };
-		input.getLineOffsets(mLineOffsets);
+		mData.calcLineOffsets(mLineOffsets);
 	}
 
 	Logger::Report::Report() {
@@ -35,19 +33,10 @@ namespace tp {
 	}
 
 	void Logger::write(const String& in, bool post, Report::Type type) {
-		StringTemplate copy = in;
-		copy.capture();
-		mBuff.pushBack(Report(copy, type));
-
+		mBuff.pushBack(Report(in, type));
 		mLineCount += mBuff.last()->data.getLineCount();
-
-		if (!mCursor) {
-			mCursor = mBuff.last();
-		}
-
-		if (post) {
-			printf("%s", in.raw());
-		}
+		if (!mCursor) mCursor = mBuff.last();
+		if (post) printf("%s", in.read());
 	}
 
 	String Logger::read() {

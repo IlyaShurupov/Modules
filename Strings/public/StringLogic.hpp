@@ -170,5 +170,24 @@ namespace tp {
 			}
 			return true;
 		}
+
+		static void calcLineOffsets(const tChar* aBuff, Index aLength, Buffer<Index>& aOut) {
+			halni lines = 0;
+			for (auto idx : Range(aLength)) {
+				if (isNewLineChar(aBuff[idx])) {
+					lines++;
+				}
+			}
+			aOut.reserve(lines + 2); // plus start and end offsets
+			lines = 0;
+			for (auto idx : Range(aLength)) {
+				if (isNewLineChar(aBuff[idx])) {
+					aOut[lines + 1] = Index(idx + 1);
+					lines++;
+				}
+			}
+			aOut[0] = 0;
+			aOut[lines + 1] = aLength;
+		}
 	};
 }
